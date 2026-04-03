@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Sober's Mod | Cloud Edition</title>
+    <script src="https://yandex.ru/games/sdk/v2"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #111; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; }
+        #ui-panel { position: absolute; top: 20px; left: 20px; z-index: 10; display: flex; gap: 10px; }
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: sans-serif;
+            transition: 0.3s;
+        }
+        .glass-btn:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <button class="glass-btn" onclick="spawnItem('ak47')">🔫 Спавн АК-47</button>
+        <button class="glass-btn" onclick="spawnItem('iphone17')">📱 Спавн iPhone 17</button>
+    </div>
+
+    <canvas id="renderCanvas"></canvas>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
+        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-storage.js";
+
+        // Твой конфиг Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBuGhykIbOOswxRDu_DtrX2bcQGvYRI7cc",
+            authDomain: "sober-s-mod.firebaseapp.com",
+            projectId: "sober-s-mod",
+            storageBucket: "sober-s-mod.firebasestorage.app",
+            appId: "1:161029462997:web:70f055beeed1add5a5bb5c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const storage = getStorage(app);
+
+        // Инициализация Babylon.js
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+        
+        const createScene = function() {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1);
+
+            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, new BABYLON.Vector3(0, 0, 0), scene);
+            camera.attachControl(canvas, true);
+
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.8;
+
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 20, height: 20}, scene);
+            const groundMat = new BABYLON.StandardMaterial("gMat", scene);
+            groundMat.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+            ground.material = groundMat;
+
+            return scene;
+        };
+
+        const scene = createScene();
+
+        // Функция спавна из Firebase
+        window.spawnItem = async function(itemName) {
+            console.log(`Загрузка ${itemName}...`);
+            try {
+                const modelRef = ref(storage, `models/${itemName}.glb`);
+                const url = await getDownloadURL(modelRef);
+                
+                BABYLON.SceneLoader.ImportMesh("", "", url, scene, function (meshes) {
+                    const root = meshes[0];
+                    root.position = new BABYLON.Vector3(Math.random()*4-2, 5, Math.random()*4-2);
+                    
+                    // Эффект появления (масштабирование)
+                    root.scaling = new BABYLON.Vector3(0, 0, 0);
+                    const anim = new BABYLON.Animation("spawnAnim", "scaling", 30, BABYLON.Animation.ANIMATIONTYPE_VECTOR3);
+                    anim.setKeys([{frame: 0, value: new BABYLON.Vector3(0,0,0)}, {frame: 20, value: new BABYLON.Vector3(1,1,1)}]);
+                    root.animations.push(anim);
+                    scene.beginAnimation(root, 0, 20);
+                });
+            } catch (error) {
+                console.error("Ошибка загрузки модели:", error);
+                alert("Проверь, лежит ли файл в Firebase Storage в папке models!");
+            }
+        };
+
+        // Инициализация Yandex SDK
+        YaGames.init().then(ysdk => {
+            window.ysdk = ysdk;
+            console.log("Yandex SDK готов!");
+        });
+
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener("resize", () => engine.resize());
+    </script>
+</body>
+</html>
